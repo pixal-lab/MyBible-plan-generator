@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "Generador de planes de lectura para MyBible",
   "private": true,
+  "homepage": "https://pixal-lab.github.io/MyBible-plan-generator",
   "dependencies": {
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.1",
