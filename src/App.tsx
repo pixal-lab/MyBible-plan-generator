@@ -102,7 +102,7 @@ const INITIAL_PLAN_INFO: MyBibleInfoTable[] = [
 ];
 
 const DROPBOX_APP_KEY = process.env.REACT_APP_DROPBOX_APP_KEY || '';
-const DROPBOX_REDIRECT_URI = `${window.location.origin}/callback.html`;
+const DROPBOX_REDIRECT_URI = `${window.location.origin}${process.env.PUBLIC_URL || ''}/callback`;
 
 function App() {
   const [planInfo, setPlanInfo] = useState<MyBibleInfoTable[]>(INITIAL_PLAN_INFO);
