@@ -1,6 +1,6 @@
 import initSqlJs from 'sql.js';
 import { MyBibleInfoTable, MyBibleReadingPlanTable } from '../types/plan';
-import { getBookNumber } from '../constants/bible';
+// import { getBookNumber } from '../constants/bible'; // Eliminado porque no se usa
 
 export class SQLiteGenerator {
   private SQL: any;

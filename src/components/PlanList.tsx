@@ -107,7 +107,7 @@ const PlanList: React.FC<PlanListProps> = ({ entries, onEntriesChange, planInfo,
     else if (entries.length === 0 && uiEntries.length > 0) {
       setUIEntries([]);
     }
-  }, [entries, uiEntries.length]);
+  }, [entries, uiEntries]);
 
   const addEntry = () => {
     const lastEntry = uiEntries[uiEntries.length - 1];
