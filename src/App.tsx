@@ -99,6 +99,7 @@ const INITIAL_PLAN_INFO: MyBibleInfoTable[] = [
   { name: 'author', value: '' }
 ];
 
+
 function App() {
   const [planInfo, setPlanInfo] = useState<MyBibleInfoTable[]>(INITIAL_PLAN_INFO);
   const [planEntries, setPlanEntries] = useState<MyBibleReadingPlanTable[]>([]);
