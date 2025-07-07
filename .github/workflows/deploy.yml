@@ -23,6 +23,8 @@ jobs:
 
       - name: Build
         run: npm run build
+        env:
+          REACT_APP_DROPBOX_APP_KEY: ${{ secrets.REACT_APP_DROPBOX_APP_KEY }}
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v3
