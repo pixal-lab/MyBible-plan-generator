@@ -7,7 +7,7 @@ import Switch from '@mui/material/Switch';
 import { styled } from '@mui/material/styles';
 import { Button, Box, Snackbar, Alert } from '@mui/material';
 import { Download as DownloadIcon, Upload as UploadIcon } from '@mui/icons-material';
-import { createDropboxPKCE, getDropboxAuthUrlPKCE, uploadFileToDropbox, DropboxAuth, DropboxPKCE } from './utils/dropboxUtil';
+import { createDropboxPKCE, getDropboxAuthUrlPKCE, uploadFileToDropbox, DropboxPKCE } from './utils/dropboxUtil';
 
 // Componente del switch personalizado
 const MaterialUISwitch = styled(Switch)(({ theme }) => ({
@@ -73,7 +73,7 @@ const useDarkMode = () => {
     return savedMode ? savedMode.split('=')[1] === 'true' : false;
   });
 
-  
+
   const toggleDarkMode = () => {
     setDarkMode((prev) => {
       const newValue = !prev;
