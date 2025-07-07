@@ -279,8 +279,6 @@ const PlanList: React.FC<PlanListProps> = ({ entries, onEntriesChange, planInfo,
     }
   };
 
-
-
   // Inicializar con una entrada por defecto si no hay ninguna
   useEffect(() => {
     if (uiEntries.length === 0 && entries.length === 0) {
@@ -288,7 +286,7 @@ const PlanList: React.FC<PlanListProps> = ({ entries, onEntriesChange, planInfo,
       setUIEntries([defaultEntry]);
       onEntriesChange(convertToOfficialEntries([defaultEntry]));
     }
-  }, [entries.length, onEntriesChange]);
+  }, [entries, uiEntries, onEntriesChange]);
 
   // Si no hay entradas, mostrar botón para agregar la primera
   if (uiEntries.length === 0) {
