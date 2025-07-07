@@ -24,7 +24,7 @@
         // Función para cerrar ventana
         function closeWindow(delay = 1000) {
             setTimeout(() => {
-                window.close();
+                // window.close();
             }, delay);
         }
         
@@ -33,35 +33,31 @@
             console.log('Callback iniciado en popup');
             console.log('URL completa:', window.location.href);
             
-            // Buscar el código de autenticación
-            let dropboxCode = null;
+            // Extrae el código de la URL
+            const params = new URLSearchParams(window.location.search);
+            const code = params.get('code');
             
-            // 1. Buscar en query parameters (?code=...)
-            const searchParams = new URLSearchParams(window.location.search);
-            dropboxCode = searchParams.get('code');
-            
-            console.log('Código encontrado:', dropboxCode);
+            console.log('Código encontrado:', code);
             console.log('window.opener existe:', !!window.opener);
-            console.log('window.opener.setCode existe:', !!window.opener.setCode);
             
-            if (dropboxCode && window.opener && window.opener.setCode) {
+            if (code && window.opener) {
                 try {
-                    console.log('Intentando llamar window.opener.setCode con:', dropboxCode);
+                    console.log('Intentando enviar código a la ventana principal con postMessage');
                     
-                    // Enviar el código a la ventana principal
-                    window.opener.setCode(dropboxCode);
+                    // Envía el código a la ventana principal
+                    window.opener.postMessage({ dropboxAuthCode: code }, window.location.origin);
                     
-                    console.log('setCode llamado exitosamente');
+                    console.log('Código enviado exitosamente a la ventana principal.');
                     showMessage('¡Autenticación exitosa!', 'Código enviado a la ventana principal. Cerrando ventana...');
                     closeWindow(1000);
                     
                 } catch (error) {
-                    console.error('Error al llamar setCode:', error);
+                    console.error('Error al enviar código a la ventana principal:', error);
                     showMessage('Error de Comunicación', 'Error al enviar código a la ventana principal.', true);
                     closeWindow(2000);
                 }
             } else {
-                console.error('No se pudo obtener el código o setCode no está disponible');
+                console.error('No se pudo obtener el código o window.opener no está disponible');
                 showMessage('Error de Autenticación', 'No se pudo obtener el código de autenticación.', true);
                 closeWindow(2000);
             }
