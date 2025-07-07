@@ -156,6 +156,7 @@ const PlanList: React.FC<PlanListProps> = ({ entries, onEntriesChange, planInfo,
     onEntriesChange(convertToOfficialEntries(newUIEntries));
   };
 
+  
   const updateEntry = useCallback((id: string, field: keyof UIEntry, value: string | number) => {
     setUIEntries(prevEntries => {
       const newUIEntries = prevEntries.map(entry => {
