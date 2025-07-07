@@ -7,6 +7,7 @@ import Switch from '@mui/material/Switch';
 import { styled } from '@mui/material/styles';
 import { Button, Box, Snackbar, Alert } from '@mui/material';
 import { Download as DownloadIcon, Upload as UploadIcon } from '@mui/icons-material';
+import { createDropboxPKCE, getDropboxAuthUrlPKCE, uploadFileToDropbox, DropboxAuth, DropboxPKCE } from './utils/dropboxUtil';
 
 // Componente del switch personalizado
 const MaterialUISwitch = styled(Switch)(({ theme }) => ({
@@ -72,6 +73,7 @@ const useDarkMode = () => {
     return savedMode ? savedMode.split('=')[1] === 'true' : false;
   });
 
+  
   const toggleDarkMode = () => {
     setDarkMode((prev) => {
       const newValue = !prev;
@@ -99,6 +101,8 @@ const INITIAL_PLAN_INFO: MyBibleInfoTable[] = [
   { name: 'author', value: '' }
 ];
 
+const DROPBOX_APP_KEY = process.env.REACT_APP_DROPBOX_APP_KEY || '';
+const DROPBOX_REDIRECT_URI = `${window.location.origin}/callback.html`;
 
 function App() {
   const [planInfo, setPlanInfo] = useState<MyBibleInfoTable[]>(INITIAL_PLAN_INFO);
@@ -116,6 +120,97 @@ function App() {
     message: '',
     severity: 'info'
   });
+
+  // Estado para Dropbox
+  const [dropboxToken, setDropboxToken] = useState<string | null>(null);
+  const [dropboxUser, setDropboxUser] = useState<string | null>(null);
+  const [dropboxPKCE, setDropboxPKCE] = useState<DropboxPKCE | null>(null);
+
+  // Al iniciar, revisa si hay token en localStorage
+  useEffect(() => {
+    const saved = localStorage.getItem('dropbox_token');
+    if (saved) setDropboxToken(saved);
+  }, []);
+
+  // Función para leer cookie
+  const getCookie = (name: string): string | null => {
+    const value = `; ${document.cookie}`;
+    const parts = value.split(`; ${name}=`);
+    if (parts.length === 2) return parts.pop()?.split(';').shift() || null;
+    return null;
+  };
+
+  // Función para eliminar cookie
+  const deleteCookie = (name: string) => {
+    document.cookie = `${name}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;`;
+  };
+
+  // Verificar si hay código de autenticación en cookie
+  useEffect(() => {
+    const checkAuthCode = () => {
+      const authCode = getCookie('dropbox_auth_code');
+      if (authCode && dropboxPKCE) {
+        console.log('Código encontrado en cookie:', authCode);
+        
+        // Eliminar la cookie inmediatamente
+        deleteCookie('dropbox_auth_code');
+        
+        // Obtener token con el código
+        (async () => {
+          try {
+            console.log('Intentando obtener token con código:', authCode);
+            const { result } = await (dropboxPKCE.dbx as any).auth.getAccessTokenFromCode(
+              DROPBOX_REDIRECT_URI,
+              authCode
+            );
+            console.log('Token obtenido:', result);
+            setDropboxToken(result.access_token);
+            localStorage.setItem('dropbox_token', result.access_token);
+            showNotification('¡Conectado a Dropbox exitosamente!', 'success');
+          } catch (error: any) {
+            console.error('Error al obtener token:', error);
+            showNotification('Error al obtener el token: ' + (error?.message || error), 'error');
+          }
+        })();
+      }
+    };
+
+    // Verificar inmediatamente
+    checkAuthCode();
+    
+    // Verificar cada segundo
+    const interval = setInterval(checkAuthCode, 1000);
+    
+    return () => clearInterval(interval);
+  }, [dropboxPKCE]);
+
+  // Obtener info de usuario Dropbox (opcional, para mostrar conectado)
+  useEffect(() => {
+    async function fetchUser() {
+      if (dropboxToken) {
+        try {
+          const res = await fetch('https://api.dropboxapi.com/2/users/get_current_account', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${dropboxToken}`,
+              'Content-Type': 'application/json',
+            },
+          });
+          if (res.ok) {
+            const data = await res.json();
+            setDropboxUser(data.name?.display_name || data.email || '');
+          } else {
+            setDropboxUser(null);
+          }
+        } catch {
+          setDropboxUser(null);
+        }
+      } else {
+        setDropboxUser(null);
+      }
+    }
+    fetchUser();
+  }, [dropboxToken]);
 
   // Funciones auxiliares para validación
   const getPlanValue = (name: string): string => {
@@ -274,6 +369,114 @@ function App() {
     }
   };
 
+  const handleDropboxLogin = async () => {
+    try {
+      console.log('Iniciando autenticación Dropbox...');
+      
+      // Crear instancia PKCE
+      const pkce = await createDropboxPKCE(DROPBOX_APP_KEY);
+      console.log('PKCE creado:', pkce);
+      setDropboxPKCE(pkce);
+      
+      // Obtener URL de autenticación
+      const authUrl = await getDropboxAuthUrlPKCE(pkce, DROPBOX_REDIRECT_URI);
+      console.log('URL de autenticación:', authUrl);
+      
+      // Abrir popup
+      const authWindow = window.open(authUrl, 'authwin', 'width=700,height=800');
+      console.log('Popup abierto:', authWindow);
+      
+      showNotification('Se abrió la ventana de autenticación de Dropbox. Completa el proceso allí.', 'info');
+      
+      // Cerrar popup después de 5 minutos si no se usa
+      setTimeout(() => {
+        if (authWindow && !authWindow.closed) {
+          authWindow.close();
+        }
+      }, 300000); // 5 minutos
+    } catch (error: any) {
+      console.error('Error en handleDropboxLogin:', error);
+      showNotification('Error al iniciar autenticación: ' + (error?.message || error), 'error');
+    }
+  };
+
+  const handleDropboxLogout = () => {
+    setDropboxToken(null);
+    setDropboxUser(null);
+    localStorage.removeItem('dropbox_token');
+    showNotification('Sesión de Dropbox cerrada.', 'info');
+  };
+
+  const handleSaveToDropbox = async () => {
+    if (!dropboxToken) {
+      handleDropboxLogin();
+      return;
+    }
+    if (!isFormValid()) {
+      showNotification('Completa el formulario antes de exportar a Dropbox.', 'warning');
+      return;
+    }
+    setIsGenerating(true);
+    try {
+      const zipGenerator = new ZipGenerator();
+      const zipBlob = await zipGenerator.generatePlanZip(planInfo, planEntries);
+      const filename = generateFilename(getPlanValue('description'));
+      await uploadFileToDropbox({ accessToken: dropboxToken }, `/${filename}`, zipBlob);
+      showNotification('¡Archivo subido a Dropbox exitosamente!', 'success');
+    } catch (error: any) {
+      showNotification('Error al subir a Dropbox: ' + (error?.message || error), 'error');
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  // Detectar si estamos en la ruta de callback
+  const isCallback = window.location.pathname.endsWith('/callback.html');
+
+  useEffect(() => {
+    if (isCallback) {
+      const params = new URLSearchParams(window.location.search);
+      const code = params.get('code');
+      if (code) {
+        localStorage.setItem('dropbox_auth_code', code);
+      }
+    }
+  }, [isCallback]);
+
+  useEffect(() => {
+    if (isCallback) return;
+    const checkAuthCode = () => {
+      const authCode = localStorage.getItem('dropbox_auth_code');
+      if (authCode && dropboxPKCE) {
+        localStorage.removeItem('dropbox_auth_code');
+        (async () => {
+          try {
+            const { result } = await (dropboxPKCE.dbx as any).auth.getAccessTokenFromCode(
+              DROPBOX_REDIRECT_URI,
+              authCode
+            );
+            setDropboxToken(result.access_token);
+            localStorage.setItem('dropbox_token', result.access_token);
+            showNotification('¡Conectado a Dropbox exitosamente!', 'success');
+          } catch (error: any) {
+            showNotification('Error al obtener el token: ' + (error?.message || error), 'error');
+          }
+        })();
+      }
+    };
+    const interval = setInterval(checkAuthCode, 1000);
+    return () => clearInterval(interval);
+  }, [dropboxPKCE, isCallback]);
+
+  if (isCallback) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100vh', fontFamily: 'Arial, sans-serif' }}>
+        <h2>¡Autenticación completada!</h2>
+        <p>Ya puedes cerrar esta ventana y volver a la aplicación principal.</p>
+      </div>
+    );
+  }
+
   return (
     <div className="container">
       <header className="card flex flex-col md:flex-row md:items-center md:justify-between gap-4 dark:bg-gray-800 dark:text-white">
@@ -329,6 +532,23 @@ function App() {
           >
             {isGenerating ? 'Generando...' : 'Generar Plan MyBible'}
           </button>
+          <Button
+            variant="contained"
+            color="success"
+            onClick={handleSaveToDropbox}
+            disabled={!isFormValid() || isGenerating}
+          >
+            Guardar en Dropbox
+          </Button>
+          {dropboxToken && (
+            <Button
+              variant="outlined"
+              color="secondary"
+              onClick={handleDropboxLogout}
+            >
+              Cerrar sesión Dropbox{dropboxUser ? ` (${dropboxUser})` : ''}
+            </Button>
+          )}
         </Box>
       </div>
       

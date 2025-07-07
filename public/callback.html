@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="utf-8">
+    <title>Dropbox Auth Callback</title>
+</head>
+<body>
+    <div id="loading" style="text-align: center; padding: 50px; font-family: Arial, sans-serif;">
+        <h2>Procesando autenticación...</h2>
+        <p>Por favor espera...</p>
+    </div>
+    
+    <script>
+        // Función para mostrar mensaje
+        function showMessage(title, message, isError = false) {
+            document.body.innerHTML = `
+                <div style="text-align: center; padding: 50px; font-family: Arial, sans-serif;">
+                    <h2 style="color: ${isError ? '#d32f2f' : '#2e7d32'}">${title}</h2>
+                    <p>${message}</p>
+                </div>
+            `;
+        }
+        
+        // Función para cerrar ventana
+        function closeWindow(delay = 1000) {
+            setTimeout(() => {
+                window.close();
+            }, delay);
+        }
+        
+        // Verificar si estamos en un popup
+        if (window.opener) {
+            console.log('Callback iniciado en popup');
+            console.log('URL completa:', window.location.href);
+            
+            // Buscar el código de autenticación
+            let dropboxCode = null;
+            
+            // 1. Buscar en query parameters (?code=...)
+            const searchParams = new URLSearchParams(window.location.search);
+            dropboxCode = searchParams.get('code');
+            
+            console.log('Código encontrado:', dropboxCode);
+            console.log('window.opener existe:', !!window.opener);
+            console.log('window.opener.setCode existe:', !!window.opener.setCode);
+            
+            if (dropboxCode && window.opener && window.opener.setCode) {
+                try {
+                    console.log('Intentando llamar window.opener.setCode con:', dropboxCode);
+                    
+                    // Enviar el código a la ventana principal
+                    window.opener.setCode(dropboxCode);
+                    
+                    console.log('setCode llamado exitosamente');
+                    showMessage('¡Autenticación exitosa!', 'Código enviado a la ventana principal. Cerrando ventana...');
+                    closeWindow(1000);
+                    
+                } catch (error) {
+                    console.error('Error al llamar setCode:', error);
+                    showMessage('Error de Comunicación', 'Error al enviar código a la ventana principal.', true);
+                    closeWindow(2000);
+                }
+            } else {
+                console.error('No se pudo obtener el código o setCode no está disponible');
+                showMessage('Error de Autenticación', 'No se pudo obtener el código de autenticación.', true);
+                closeWindow(2000);
+            }
+        } else {
+            // Si no hay window.opener, mostrar mensaje de error
+            showMessage('Error de Autenticación', 'Esta página debe abrirse desde la aplicación principal.', true);
+        }
+    </script>
+</body>
+</html> 
