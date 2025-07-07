@@ -1,13 +1,13 @@
 {
   "files": {
-    "main.css": "/MyBible-plan-generator/static/css/main.d2e4e4a8.css",
-    "main.js": "/MyBible-plan-generator/static/js/main.00e5e193.js",
+    "main.css": "/MyBible-plan-generator/static/css/main.9a855b2f.css",
+    "main.js": "/MyBible-plan-generator/static/js/main.6aedfdea.js",
     "index.html": "/MyBible-plan-generator/index.html",
-    "main.d2e4e4a8.css.map": "/MyBible-plan-generator/static/css/main.d2e4e4a8.css.map",
-    "main.00e5e193.js.map": "/MyBible-plan-generator/static/js/main.00e5e193.js.map"
+    "main.9a855b2f.css.map": "/MyBible-plan-generator/static/css/main.9a855b2f.css.map",
+    "main.6aedfdea.js.map": "/MyBible-plan-generator/static/js/main.6aedfdea.js.map"
   },
   "entrypoints": [
-    "static/css/main.d2e4e4a8.css",
-    "static/js/main.00e5e193.js"
+    "static/css/main.9a855b2f.css",
+    "static/js/main.6aedfdea.js"
   ]
 }
