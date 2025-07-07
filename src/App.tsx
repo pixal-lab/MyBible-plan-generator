@@ -468,6 +468,19 @@ function App() {
     return () => clearInterval(interval);
   }, [dropboxPKCE, isCallback]);
 
+  useEffect(() => {
+    function handleMessage(event: MessageEvent) {
+      // Asegúrate de que el mensaje venga de tu propio origen
+      if (event.origin !== window.location.origin) return;
+      if (event.data && event.data.dropboxAuthCode) {
+        localStorage.setItem('dropbox_auth_code', event.data.dropboxAuthCode);
+        // Aquí puedes disparar el flujo de intercambio de token
+      }
+    }
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, []);
+
   if (isCallback) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100vh', fontFamily: 'Arial, sans-serif' }}>
