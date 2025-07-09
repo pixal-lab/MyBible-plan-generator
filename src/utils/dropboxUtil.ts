@@ -95,14 +95,13 @@ export async function uploadFileToDropbox(auth: DropboxAuth, path: string, conte
       'Authorization': `Bearer ${auth.accessToken}`,
       'Dropbox-API-Arg': JSON.stringify({
         path,
-        mode: 'add',
-        autorename: true,
-        mute: false,
-        strict_conflict: false
+        mode: 'overwrite',
+        autorename: false,
+        mute: false
       }),
       'Content-Type': 'application/octet-stream',
     },
-    body: contents instanceof Blob ? await contents.arrayBuffer() : contents,
+    body: contents instanceof Blob ? await contents.arrayBuffer() : (contents instanceof ArrayBuffer ? contents : new TextEncoder().encode(contents)),
   });
   if (!res.ok) {
     throw new Error(`Error subiendo archivo a Dropbox: ${res.status} ${res.statusText}`);
@@ -110,69 +109,90 @@ export async function uploadFileToDropbox(auth: DropboxAuth, path: string, conte
   return res.json();
 }
 
-/**
- * Obtiene información de la cuenta de Dropbox
- */
-export async function getDropboxAccountInfo(auth: DropboxAuth) {
-  const res = await fetch(`${DROPBOX_API}/users/get_current_account`, {
+// Lista archivos en Dropbox según el formato especificado
+export async function listFilesInDropbox(accessToken: string, fileExtension: string): Promise<any[]> {
+  const res = await fetch(`${DROPBOX_API}/files/list_folder`, {
     method: 'POST',
     headers: {
-      'Authorization': `Bearer ${auth.accessToken}`,
+      'Authorization': `Bearer ${accessToken}`,
       'Content-Type': 'application/json',
     },
+    body: JSON.stringify({ path: '', recursive: true })
   });
-  if (!res.ok) {
-    throw new Error('No se pudo obtener la información de la cuenta de Dropbox');
+  if (!res.ok) return [];
+  const data = await res.json();
+  return (data.entries || []).filter((entry: any) => entry.name.endsWith(fileExtension));
+}
+
+// Descarga un archivo JSON desde Dropbox
+export async function downloadJsonFile(accessToken: string, path: string): Promise<any | null> {
+  const res = await fetch(`${DROPBOX_CONTENT}/files/download`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${accessToken}`,
+      'Dropbox-API-Arg': JSON.stringify({ path }),
+    },
+  });
+  if (!res.ok) return null;
+  const text = await res.text();
+  try {
+    return JSON.parse(text);
+  } catch {
+    return null;
   }
-  return res.json();
 }
 
-export function getDropboxInstance(accessToken: string) {
-  return new Dropbox({ accessToken, fetch });
-}
+// Obtiene o crea un enlace compartido directo de Dropbox
+export async function getOrCreateSharedLink(accessToken: string, path: string): Promise<string> {
+  // Intenta crear el enlace
+  let url = '';
+  try {
+    const bodyData = {
+      path
+    };
+    const res = await fetch(`${DROPBOX_API}/sharing/create_shared_link_with_settings`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(bodyData)
+    });
+    if (res.ok) {
+      const data = await res.json();
+      url = data.url.replace('www.dropbox.com', 'dl.dropbox.com').replace('?dl=0', '');
+    } else {
+      // Si falla, busca el enlace existente
+      const res2 = await fetch(`${DROPBOX_API}/sharing/list_shared_links`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ path})
+      });
+      if (res2.ok) {
+        const data2 = await res2.json();
+        if (data2.links && data2.links.length > 0) {
+          url = data2.links[0].url.replace('www.dropbox.com', 'dl.dropbox.com').replace('?dl=0', '');
+        }
+      }
+    }
+  } catch (e) {
+    // Si falla, deja url vacío
+  }
+  return url;
+} 
 
-// Crear o subir archivo
-export async function uploadFile(dbx: Dropbox, path: string, contents: Blob | ArrayBuffer | string) {
-  const fileContents = contents instanceof Blob ? await contents.arrayBuffer() : contents;
-  return dbx.filesUpload({
-    path,
-    contents: fileContents,
-    mode: { '.tag': 'add' }, // Cambia a 'overwrite' para sobrescribir
-    autorename: false,
-    mute: false,
-    strict_conflict: false,
+// Elimina un archivo en Dropbox
+export async function deleteDropboxFile(accessToken: string, path: string): Promise<void> {
+  const res = await fetch(`${DROPBOX_API}/files/delete_v2`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ path })
   });
-}
-
-// Buscar archivos/carpetas
-export async function searchFiles(dbx: Dropbox, query: string, path = '') {
-  const res = await dbx.filesSearchV2({
-    query,
-    options: { path, max_results: 20 }
-  });
-  return res.result.matches;
-}
-
-// Modificar archivo (sobrescribir)
-export async function updateFile(dbx: Dropbox, path: string, newContents: Blob | ArrayBuffer | string) {
-  const fileContents = newContents instanceof Blob ? await newContents.arrayBuffer() : newContents;
-  return dbx.filesUpload({
-    path,
-    contents: fileContents,
-    mode: { '.tag': 'overwrite' },
-    autorename: false,
-    mute: false,
-    strict_conflict: false,
-  });
-}
-
-// Eliminar archivo o carpeta
-export async function deleteFileOrFolder(dbx: Dropbox, path: string) {
-  return dbx.filesDeleteV2({ path });
-}
-
-// Descargar archivo
-export async function downloadFile(dbx: Dropbox, path: string) {
-  const res = await dbx.filesDownload({ path });
-  return res.result;
+  if (!res.ok) throw new Error('No se pudo eliminar el archivo en Dropbox');
 } 

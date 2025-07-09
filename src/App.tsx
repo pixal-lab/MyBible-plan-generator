@@ -5,9 +5,10 @@ import { MyBibleInfoTable, MyBibleReadingPlanTable } from './types/plan';
 import { ZipGenerator } from './utils/zipGenerator';
 import Switch from '@mui/material/Switch';
 import { styled } from '@mui/material/styles';
-import { Button, Box, Snackbar, Alert } from '@mui/material';
+import { Button, Box, Snackbar, Alert, ThemeProvider, createTheme } from '@mui/material';
 import { Download as DownloadIcon, Upload as UploadIcon } from '@mui/icons-material';
 import { createDropboxPKCE, getDropboxAuthUrlPKCE, uploadFileToDropbox, DropboxPKCE } from './utils/dropboxUtil';
+import DropboxModuleManager from './components/DropboxModuleManager';
 
 // Componente del switch personalizado
 const MaterialUISwitch = styled(Switch)(({ theme }) => ({
@@ -102,7 +103,18 @@ const INITIAL_PLAN_INFO: MyBibleInfoTable[] = [
 ];
 
 const DROPBOX_APP_KEY = process.env.REACT_APP_DROPBOX_APP_KEY || '';
-const DROPBOX_REDIRECT_URI = `${window.location.origin}${process.env.PUBLIC_URL || ''}/callback`;
+
+function getRedirectUri() {
+  if (window.location.origin.includes('localhost')) {
+    return 'http://localhost:3000/callback';
+  }
+  let base = window.location.origin;
+  let publicUrl = process.env.PUBLIC_URL || '';
+  // En producción (GitHub Pages)
+  return `${base}${publicUrl.replace(/\/$/, '')}/callback`;
+}
+
+const DROPBOX_REDIRECT_URI = getRedirectUri();
 
 function App() {
   const [planInfo, setPlanInfo] = useState<MyBibleInfoTable[]>(INITIAL_PLAN_INFO);
@@ -429,9 +441,15 @@ function App() {
       setIsGenerating(false);
     }
   };
+  const handleConectDropbox = async () => {
+    if (!dropboxToken) {
+      handleDropboxLogin();
+      return;
+    }
+  };
 
   // Detectar si estamos en la ruta de callback
-  const isCallback = window.location.pathname.endsWith('/callback.html');
+  const isCallback = window.location.pathname.endsWith('/callback');
 
   useEffect(() => {
     if (isCallback) {
@@ -490,231 +508,259 @@ function App() {
     );
   }
 
+  // Theme de MUI sincronizado con darkMode
+  const theme = createTheme({
+    palette: {
+      mode: darkMode ? 'dark' : 'light',
+    },
+  });
+
   return (
-    <div className="container">
-      <header className="card flex flex-col md:flex-row md:items-center md:justify-between gap-4 dark:bg-gray-800 dark:text-white">
-        <div>
-          <h1>Generador de Planes de Lectura para MyBible</h1>
-          <p>Crea planes de lectura personalizados para la aplicación MyBible</p>
+    <ThemeProvider theme={theme}>
+      <div className="container">
+        <header className="card flex flex-col md:flex-row md:items-center md:justify-between gap-4 dark:bg-gray-800 dark:text-white">
+          <div>
+            <h1>Generador de Planes de Lectura para MyBible</h1>
+            <p>Crea planes de lectura personalizados para la aplicación MyBible</p>
+          </div>
+          <MaterialUISwitch
+            checked={darkMode}
+            onChange={toggleDarkMode}
+          />
+        </header>
+
+        <div className="card">
+          <PlanForm 
+            planInfo={planInfo}
+            setPlanInfo={setPlanInfo}
+          />
         </div>
-        <MaterialUISwitch
-          checked={darkMode}
-          onChange={toggleDarkMode}
-        />
-      </header>
 
-      <div className="card">
-        <PlanForm 
-          planInfo={planInfo}
-          setPlanInfo={setPlanInfo}
-        />
-      </div>
+        <div className="card">
+          <PlanList 
+            entries={planEntries}
+            onEntriesChange={setPlanEntries}
+            planInfo={planInfo}
+            onPlanInfoChange={setPlanInfo}
+          />
+        </div>
 
-      <div className="card">
-        <PlanList 
-          entries={planEntries}
-          onEntriesChange={setPlanEntries}
-          planInfo={planInfo}
-          onPlanInfoChange={setPlanInfo}
-        />
-      </div>
-
-      <div className="card">
-        <Box display="flex" gap={2} justifyContent="center" flexWrap="wrap">
-          <Button
-            variant="outlined"
-            color="primary"
-            startIcon={<UploadIcon />}
-            onClick={importFromJSON}
-          >
-            Importar JSON
-          </Button>
-          <Button
-            variant="outlined"
-            color="primary"
-            startIcon={<DownloadIcon />}
-            onClick={exportToJSON}
-            disabled={planEntries.length === 0}
-          >
-            Exportar JSON
-          </Button>
-          <button
-            className="btn"
-            onClick={handleGeneratePlan}
-            disabled={!isFormValid() || isGenerating}
-          >
-            {isGenerating ? 'Generando...' : 'Generar Plan MyBible'}
-          </button>
-          <Button
-            variant="contained"
-            color="success"
-            onClick={handleSaveToDropbox}
-            disabled={!isFormValid() || isGenerating}
-          >
-            Guardar en Dropbox
-          </Button>
-          {dropboxToken && (
+        <div className="card">
+          <Box display="flex" gap={2} justifyContent="center" flexWrap="wrap">
             <Button
               variant="outlined"
-              color="secondary"
-              onClick={handleDropboxLogout}
+              color="primary"
+              startIcon={<UploadIcon />}
+              onClick={importFromJSON}
             >
-              Cerrar sesión Dropbox{dropboxUser ? ` (${dropboxUser})` : ''}
+              Importar JSON
             </Button>
-          )}
-        </Box>
-      </div>
-      
-      {/* Overlay de carga */}
-      {isLoading && (
-        <Box
-          sx={{
-            position: 'fixed',
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: 'rgba(0, 0, 0, 0.5)',
-            display: 'flex',
-            justifyContent: 'center',
-            alignItems: 'center',
-            zIndex: 9999,
-          }}
-        >
+            <Button
+              variant="outlined"
+              color="primary"
+              startIcon={<DownloadIcon />}
+              onClick={exportToJSON}
+              disabled={planEntries.length === 0}
+            >
+              Exportar JSON
+            </Button>
+            <button
+              className="btn"
+              onClick={handleGeneratePlan}
+              disabled={!isFormValid() || isGenerating}
+            >
+              {isGenerating ? 'Generando...' : 'Descargar Plan MyBible'}
+            </button>
+            {dropboxToken && (
+              <>
+                <Button
+                  variant="outlined"
+                  color="secondary"
+                  onClick={handleDropboxLogout}
+                >
+                  Cerrar sesión Dropbox{dropboxUser ? ` (${dropboxUser})` : ''}
+                </Button>
+                <Button
+                  variant="contained"
+                  color="success"
+                  onClick={handleSaveToDropbox}
+                  disabled={!isFormValid() || isGenerating}
+                  >
+                  Guardar en Dropbox
+                </Button>
+              </>
+            )}
+            {!dropboxToken && (
+              <>
+                <Button
+                  variant="contained"
+                  color="success"
+                  onClick={handleConectDropbox}
+                  disabled={isGenerating}
+                  >
+                  Conectar con Dropbox
+                </Button>
+              </>
+            )}
+          </Box>
+        </div>
+        
+        {/* Overlay de carga */}
+        {isLoading && (
           <Box
             sx={{
-              backgroundColor: 'var(--bg-secondary)',
-              borderRadius: 2,
-              padding: 3,
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              backgroundColor: 'rgba(0, 0, 0, 0.5)',
               display: 'flex',
-              flexDirection: 'column',
+              justifyContent: 'center',
               alignItems: 'center',
-              gap: 2,
-              boxShadow: 3,
+              zIndex: 9999,
             }}
           >
             <Box
               sx={{
-                width: 40,
-                height: 40,
-                border: '4px solid var(--border-color)',
-                borderTop: '4px solid var(--btn-primary)',
-                borderRadius: '50%',
-                animation: 'spin 1s linear infinite',
-                '@keyframes spin': {
-                  '0%': { transform: 'rotate(0deg)' },
-                  '100%': { transform: 'rotate(360deg)' },
-                },
+                backgroundColor: 'var(--bg-secondary)',
+                borderRadius: 2,
+                padding: 3,
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                gap: 2,
+                boxShadow: 3,
               }}
-            />
-            <Box sx={{ color: 'var(--text-primary)', fontSize: '1.1rem', fontWeight: 500 }}>
-              Cargando JSON...
+            >
+              <Box
+                sx={{
+                  width: 40,
+                  height: 40,
+                  border: '4px solid var(--border-color)',
+                  borderTop: '4px solid var(--btn-primary)',
+                  borderRadius: '50%',
+                  animation: 'spin 1s linear infinite',
+                  '@keyframes spin': {
+                    '0%': { transform: 'rotate(0deg)' },
+                    '100%': { transform: 'rotate(360deg)' },
+                  },
+                }}
+              />
+              <Box sx={{ color: 'var(--text-primary)', fontSize: '1.1rem', fontWeight: 500 }}>
+                Cargando JSON...
+              </Box>
             </Box>
           </Box>
-        </Box>
-      )}
-      
-      {/* Notificaciones */}
-      <Snackbar
-        open={notification.open}
-        autoHideDuration={6000}
-        onClose={handleCloseNotification}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-        sx={{
-          '& .MuiSnackbar-root': {
-            zIndex: 9999
-          }
-        }}
-      >
-        <Alert 
-          onClose={handleCloseNotification} 
-          severity={notification.severity}
-          sx={{ 
-            width: '100%',
-            minWidth: '300px',
-            maxWidth: '500px',
-            fontSize: '1rem',
-            fontWeight: 500,
-            boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
-            '& .MuiAlert-icon': {
-              fontSize: '1.5rem'
-            },
-            '& .MuiAlert-message': {
-              padding: '4px 0'
-            },
-            '&.MuiAlert-standardSuccess': {
-              backgroundColor: '#d4edda',
-              color: '#155724',
-              border: '1px solid #c3e6cb',
+        )}
+        
+        {/* Notificaciones */}
+        <Snackbar
+          open={notification.open}
+          autoHideDuration={6000}
+          onClose={handleCloseNotification}
+          anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+          sx={{
+            '& .MuiSnackbar-root': {
+              zIndex: 9999
+            }
+          }}
+        >
+          <Alert 
+            onClose={handleCloseNotification} 
+            severity={notification.severity}
+            sx={{ 
+              width: '100%',
+              minWidth: '300px',
+              maxWidth: '500px',
+              fontSize: '1rem',
+              fontWeight: 500,
+              boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
               '& .MuiAlert-icon': {
-                color: '#28a745'
-              }
-            },
-            '&.MuiAlert-standardError': {
-              backgroundColor: '#f8d7da',
-              color: '#721c24',
-              border: '1px solid #f5c6cb',
-              '& .MuiAlert-icon': {
-                color: '#dc3545'
-              }
-            },
-            '&.MuiAlert-standardWarning': {
-              backgroundColor: '#fff3cd',
-              color: '#856404',
-              border: '1px solid #ffeaa7',
-              '& .MuiAlert-icon': {
-                color: '#ffc107'
-              }
-            },
-            '&.MuiAlert-standardInfo': {
-              backgroundColor: '#d1ecf1',
-              color: '#0c5460',
-              border: '1px solid #bee5eb',
-              '& .MuiAlert-icon': {
-                color: '#17a2b8'
-              }
-            },
-            // Estilos para modo oscuro
-            ...(darkMode && {
+                fontSize: '1.5rem'
+              },
+              '& .MuiAlert-message': {
+                padding: '4px 0'
+              },
               '&.MuiAlert-standardSuccess': {
-                backgroundColor: '#1e4a2e',
-                color: '#d4edda',
-                border: '1px solid #28a745',
+                backgroundColor: '#d4edda',
+                color: '#155724',
+                border: '1px solid #c3e6cb',
                 '& .MuiAlert-icon': {
                   color: '#28a745'
                 }
               },
               '&.MuiAlert-standardError': {
-                backgroundColor: '#4a1e1e',
-                color: '#f8d7da',
-                border: '1px solid #dc3545',
+                backgroundColor: '#f8d7da',
+                color: '#721c24',
+                border: '1px solid #f5c6cb',
                 '& .MuiAlert-icon': {
                   color: '#dc3545'
                 }
               },
               '&.MuiAlert-standardWarning': {
-                backgroundColor: '#4a3e1e',
-                color: '#fff3cd',
-                border: '1px solid #ffc107',
+                backgroundColor: '#fff3cd',
+                color: '#856404',
+                border: '1px solid #ffeaa7',
                 '& .MuiAlert-icon': {
                   color: '#ffc107'
                 }
               },
               '&.MuiAlert-standardInfo': {
-                backgroundColor: '#1e3a4a',
-                color: '#d1ecf1',
-                border: '1px solid #17a2b8',
+                backgroundColor: '#d1ecf1',
+                color: '#0c5460',
+                border: '1px solid #bee5eb',
                 '& .MuiAlert-icon': {
                   color: '#17a2b8'
                 }
-              }
-            })
-          }}
-        >
-          {notification.message}
-        </Alert>
-      </Snackbar>
-    </div>
+              },
+              // Estilos para modo oscuro
+              ...(darkMode && {
+                '&.MuiAlert-standardSuccess': {
+                  backgroundColor: '#1e4a2e',
+                  color: '#d4edda',
+                  border: '1px solid #28a745',
+                  '& .MuiAlert-icon': {
+                    color: '#28a745'
+                  }
+                },
+                '&.MuiAlert-standardError': {
+                  backgroundColor: '#4a1e1e',
+                  color: '#f8d7da',
+                  border: '1px solid #dc3545',
+                  '& .MuiAlert-icon': {
+                    color: '#dc3545'
+                  }
+                },
+                '&.MuiAlert-standardWarning': {
+                  backgroundColor: '#4a3e1e',
+                  color: '#fff3cd',
+                  border: '1px solid #ffc107',
+                  '& .MuiAlert-icon': {
+                    color: '#ffc107'
+                  }
+                },
+                '&.MuiAlert-standardInfo': {
+                  backgroundColor: '#1e3a4a',
+                  color: '#d1ecf1',
+                  border: '1px solid #17a2b8',
+                  '& .MuiAlert-icon': {
+                    color: '#17a2b8'
+                  }
+                }
+              })
+            }}
+          >
+            {notification.message}
+          </Alert>
+        </Snackbar>
+
+        {/* Gestor de módulos MyBible en Dropbox */}
+        {dropboxToken && (
+          <DropboxModuleManager dropboxToken={dropboxToken} />
+        )}
+      </div>
+    </ThemeProvider>
   );
 }
 
